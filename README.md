@@ -48,6 +48,79 @@ human has signed off.
 | Memory on disk (the model forgets between runs) | All loop state is `specs/<feature>/loop/*.md`; the conversation is disposable |
 | Don't surrender judgment | `/speckit.loop.guard` — debt sweep, anti-surrender questions, human sign-off gate |
 
+## Why this over Spec Kit alone?
+
+Spec Kit takes you from intent to a working feature:
+`/speckit.specify → /speckit.plan → /speckit.tasks → /speckit.implement`. Everything
+up to `tasks.md` is the strong part — and this extension never touches it. The strain
+shows up at the **last step**. `/speckit.implement` runs the same agent that planned
+the work, building task after task and deciding for itself when they are done. Spec
+Kit is designed to be *human-guided at every step*; the moment you let that implement
+step iterate on its own, the three failure modes from above have no owner:
+
+- **Who says "done"?** — *no stop condition.* `/speckit.implement` ends when the agent
+  judges the tasks handled. There is no fixed, checkable stop condition and no budget;
+  the loop ends when the model (or your patience) runs out.
+- **Who checks the work?** — *unattended verification.* The agent that wrote the code
+  is the one that grades it. `/speckit.analyze` and `/speckit.checklist` help, but they
+  run in the same head that just argued the code is correct.
+- **Who still understands it?** — *comprehension debt.* A long implement run can change
+  more than you have read, and nothing records that gap or makes you close it before
+  shipping.
+
+This extension wraps **exactly that one phase**. It leaves `specify`, `plan`, and
+`tasks` alone and turns the open-ended implement step into a bounded, independently
+graded, signed-off loop:
+
+| At the build-and-verify step | Spec Kit alone (`/speckit.implement`) | + Loop extension |
+|---|---|---|
+| Stop condition | the agent's judgement — "looks done" | checkable done-criteria, fixed in a contract before the loop runs (`define`) |
+| Iteration budget | unbounded | `max_iterations` hard ceiling → forced human review |
+| Who grades the work | the agent that wrote it | an independent, adversarial checker, in a fresh session (`check`) |
+| Verdicts | implicit, in the chat | `verdicts.md`: per-criterion pass/fail/uncertain + method + confidence |
+| Understanding gap | invisible | a `debt.md` ledger that gates `done` |
+| Declaring done | the agent self-certifies | `guard`: a logged human sign-off is required |
+| Resume after a restart | lost with the conversation | `status` re-renders state from disk |
+| Audit trail | one expired chat | diffable markdown committed beside the feature |
+
+### The same feature, with and without the loop
+
+A `/health` endpoint that must actually hit the database (the tutorial's feature).
+
+**Spec Kit alone** — one open-ended, self-graded pass:
+
+```text
+/speckit.implement
+→ writes GET /health → {status:"ok"}, adds a test, runs it
+→ "Implemented the health endpoint. All tasks complete. ✅"
+   # returns 200 unconditionally — the DB is never queried —
+   # and the agent that wrote it is the one calling it done.
+```
+
+**With the loop** — bounded, independently checked, signed off:
+
+```text
+/speckit.loop.run
+→ iter-1: GET /health → {status:"ok"}; marks D2 maker-ready (never "done")
+
+/speckit.loop.check            # fresh session: the checker did not write the code
+→ D2 pass · D3 FAIL — returns 200 unconditionally; DB never queried
+→ routed back to the maker
+
+/speckit.loop.run D3
+→ iter-2: real DB ping + a test that kills the DB
+/speckit.loop.check            # fresh session
+→ D3 pass (verified: killed the DB → /health returns 503)
+→ every criterion checker-pass → /speckit.loop.guard
+
+/speckit.loop.guard signoff
+→ a human who can explain the change signs off → Phase: done
+```
+
+Same agent, same tasks — the difference is what *"done"* now means: an independent
+checker tried to break the work and a human signed off, instead of the author
+declaring victory.
+
 ## What you gain
 
 The loop does the iterating; you keep the authority. Concretely:
