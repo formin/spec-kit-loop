@@ -56,10 +56,18 @@ The `--from` install path and the catalog both resolve to GitHub release archive
 
 ## OpenWiki refresh workflow
 
-[.github/workflows/openwiki-update.yml](../../.github/workflows/openwiki-update.yml) keeps the `openwiki/` docs current. It runs on `workflow_dispatch` and on a daily schedule (`0 21 * * *` UTC = 06:00 KST):
+The `openwiki/` docs are refreshed **daily at 08:00 KST by a local scheduled
+task on the maintainer's machine**, running `openwiki --update --print`
+against a local LM Studio server (`OPENWIKI_PROVIDER=openai`,
+`OPENAI_BASE_URL=http://127.0.0.1:1234/v1`) and pushing any `openwiki/`
+changes directly to `main` (`docs: update OpenWiki`). If the LM Studio server
+is not running, the task logs the fact and skips the run.
 
-1. Checks out the repository and sets up Node.js 22.
-2. Installs the `openwiki` CLI globally via npm and runs `openwiki --update --print` with `OPENWIKI_PROVIDER: anthropic` and `OPENWIKI_MODEL_ID: anthropic/claude-sonnet-5`.
-3. Opens a pull request (branch `openwiki/update`, via `peter-evans/create-pull-request`) containing only `openwiki/` changes, titled `docs: update OpenWiki`.
-
-It requires an `ANTHROPIC_API_KEY` repository secret; without it the OpenWiki step fails and no PR is opened. The workflow has `contents: write` and `pull-requests: write` permissions.
+[.github/workflows/openwiki-update.yml](../../.github/workflows/openwiki-update.yml)
+remains as a **manual cloud fallback** (`workflow_dispatch` only — GitHub
+runners cannot reach the local endpoint): it runs OpenWiki with
+`OPENWIKI_PROVIDER: anthropic` / `OPENWIKI_MODEL_ID: anthropic/claude-sonnet-5`
+and opens a pull request (branch `openwiki/update`, via
+`peter-evans/create-pull-request`). It requires an `ANTHROPIC_API_KEY`
+repository secret and has `contents: write` and `pull-requests: write`
+permissions.
